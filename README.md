@@ -1,8 +1,8 @@
 # Fast-Machine-Unlearning
 
 The procedure for unlearning is presented in notebook. The code requires following packages to be installed:
-1. PyTorch >= 1.5.0
-2. TorchVision >= 0.2.2
+1. PyTorch >= 1.5.0 (modern PyTorch >= 2.0 is recommended)
+2. TorchVision >= 0.2.2 (use the release matching your PyTorch)
 3. Numpy >= 1.21.3
 
 All the dependencies can be installed using envirnment.yml file.
@@ -21,3 +21,9 @@ If conda is not installed in system, the depedencies could be installed using pi
 ```pip install torch==1.5.0 torchvision==0.2.2```
 
 ```pip install numpy==1.21.3```
+
+Note: the pinned versions above (`torch==1.5.0`, `torchvision==0.2.2`) are very old and are not installable on recent Python versions. Modern PyTorch (>= 2.0, tested with 2.6) works with the notebook too, so on a current setup simply run:
+
+```pip install torch torchvision```
+
+Windows and CPU-only machines are supported: the notebook uses the GPU when one is available and otherwise falls back to CPU, and DataLoader workers are set to 0 on Windows.

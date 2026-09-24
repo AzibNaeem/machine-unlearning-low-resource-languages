@@ -1,0 +1,24 @@
+.venv/
+.venv-pdf/
+data/
+*.pt
+*.tgz
+__pycache__/
+outputs/
+*.ipynb_checkpoints
+
+# FYP-identifying / personal material -- kept locally, not published
+CLAUDE.md
+F26-133.pdf
+F26-133_deliverable_2.pdf
+Machine Unlearning for Low-Resource Languages (formal).pptx
+docs/FYP_Results_Report.pdf
+docs/pdf_build/
+docs/presentation_outline.md
+docs/presentation_script.md
+docs/presentation_script.pdf
+docs/presentation_guide.md
+docs/presentation_guide.pdf
+docs/talking_points.md
+docs/talking_points.pdf
+docs/code_reference.pdf
