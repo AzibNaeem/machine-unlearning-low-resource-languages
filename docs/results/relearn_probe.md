@@ -1,0 +1,38 @@
+# Linear probe and relearn time (R_t) on the current base (test 76.80), 2026-09-25
+
+Script `vision/rt_probe.py`; raw rows (incl. per-epoch relearn curves) in `outputs/cleanup/rt_probe/results.json`, log `run.log`. Base sha256 unchanged (`894470b4...f5749`, start and end).
+
+## Protocol (ours, identical for every method)
+
+- Forget classes 0-4, seed 0, one class at a time. Methods reproduced by calling the library functions with the configs in `outputs/cleanup/table/run_all.sh` (no re-tuning): DNF (impair lr 0.02, repair lr 0.01, batch 250, retain_sub 1000/class), UNSIR nb72 (SGD) / nb20 (Adam), USI(F)R alpha 10, E_r 2, nb72 (SGD) / nb5 (Adam), FineTune (lr 0.01, 5 ep, retain_sub), NegGrad (lr 1e-3, 3 ep, forget_train), Retrain from scratch 40 ep on retain_train, and the untouched Base.
+- **Linear probe.** Frozen 512-d avgpool features (model in eval mode, fc removed). Probe train set: the 200 held-out train images per class (2000 total, all 10 classes) that `class_split` reserves as "val" - never used by any unlearning method or by Retrain (the base itself was trained on them). StandardScaler + sklearn multinomial LogisticRegression, L2, C=0.1, lbfgs, random_state 0. Evaluated on the 10000 test images: recall on the forgotten class ("probe_f") and accuracy on the other 9 classes ("probe_r").
+- **Relearn.** Fine-tune the unlearned model (train mode, BN updating) on 100 forget-class train images + 100 images per retain class (900, from retain_sub): 1000 images, Adam lr 1e-4, batch 50, 30 epochs, no augmentation. Retain images are included so that the model cannot trivially "relearn" by predicting the forget class for everything. After each epoch, forget-class test accuracy. **R_t = first epoch with forget acc >= 50%** (0 = already true before training; ">30" = never). The "90% of base" criterion was never reached by any unlearned model (base forget acc is 62-86%), so it is not tabulated.
+- Mean over 5 classes, (class-level SE). R_t means treat ">30" as 31, so those means are lower bounds.
+
+## Results (mean over classes 0-4, SE in brackets)
+
+| Method | Acc_f | Acc_r | W_D | probe forget acc | probe retain acc | R_t (epochs, per class 0..4) | forget acc after 30 ep |
+|---|---|---|---|---|---|---|---|
+| Base | 74.0 (4.3) | 77.1 | 0 | 74.0 (4.4) | 77.0 | 0 | 73.9 |
+| **Retrain40** | 0.0 | 74.8 (1.1) | 104.8 | **36.6 (3.1)** | 73.1 | >30 x5 | **0.0** |
+| DNF-SGD n18000 | 0.2 (0.2) | 76.7 (0.7) | 5.4 | 57.3 (5.0) | 74.8 | 13, 9, >30, >30, 15 | 54.2 |
+| DNF-Adam n18000 | 0.0 | 68.7 (1.0) | 104.7 | 39.0 (5.1) | 67.0 | 30, >30 x4 | 29.1 |
+| DNF-SGD n0 (control) | 76.7 (4.0) | 76.6 | 0.3 | 73.9 | 76.9 | 0 x5 | 71.8 |
+| DNF-Adam n0 (control) | 0.0 | 69.7 (1.0) | 88.7 | 42.7 (4.8) | 68.7 | >30 x5 | 7.2 |
+| UNSIR-SGD nb72 | 12.1 (4.9) | 77.6 (0.7) | 4.3 | 64.0 (3.9) | 75.8 | 4, 8, 21, >30, 13 | 57.9 |
+| UNSIR-Adam nb20 | 0.0 | 69.1 (0.8) | 97.1 | 41.6 (3.7) | 67.6 | >30 x5 | 26.2 |
+| USI(F)R-SGD nb72 | 5.8 (2.6) | 77.9 (0.8) | 4.0 | 62.4 (4.2) | 75.7 | 9, 5, >30, >30, 21 | 54.9 |
+| USI(F)R-Adam nb5 | 0.0 | 71.2 (0.7) | 96.5 | 39.6 (4.3) | 69.0 | >30 x5 | 23.3 |
+| FineTune | 0.1 (0.1) | 71.2 (0.9) | 53.4 | 51.7 (4.9) | 70.3 | 25, 27, >30 x3 | 45.3 |
+| NegGrad | 0.1 | 62.7 (1.7) | 8.5 | 42.8 (1.2) | 70.3 | 8, 8, >30, >30, 21 | 53.3 |
+
+Acc_f/Acc_r/W_D agree with the 30-run table within class-level noise (DNF-SGD 0.2/76.7/5.4 vs 0.25/76.46/5.2; UNSIR-SGD Acc_f 12.1 vs 15.4; FineTune 71.2 vs 70.0 retain; NegGrad 62.7 vs 61.8). Retrain40 (single run) forgets fully, retain 74.8, still 2.3 below base (77.1): not an upper bound on retain.
+
+## Reading
+
+- **Probe.** The Retrain floor here is 36.6% (per class 28-44), not ~5% as in Sup2's diagnostic. The floor is protocol- and run-dependent (see `cleanup_supervisor.md`: on class 0 a Retrain rerun gives 50.2 with this probe, 42.7 in the table, 23.1 with Sup2's probe), so quote the paired excess over Retrain on the same class, not absolute levels. Paired excess (mean over 5 classes, SE, classes above): DNF-SGD +20.7 (2.7, 5/5), USI(F)R-SGD +25.8 (2.6, 5/5), UNSIR-SGD +27.4 (2.2, 5/5), FineTune +15.1 (2.3, 5/5), NegGrad +6.2 (2.8, 4/5), Adam methods +2.4 to +5.0 (SE 1.6-2.9, 4/5) and the Adam no-noise control +6.1 (2.3, 5/5). Given the 7-point run-to-run spread of the floor, only the SGD-noise methods and FineTune are clearly above it.
+- **R_t.** Retrain stays at 0% forget test acc for all 30 epochs, but a spot check (class 0) shows it does not even fit the 100 forget training images (train acc 0% throughout), so ">30" means "not relearned within this weak budget", not proof that the information is gone (its probe is 37-50%). Adam-based methods and their control are also >30 in nearly all classes (DNF-Adam n18000 reaches 50% once, at epoch 30) and end at 7-29% after 30 epochs. SGD-noise methods relearn quickly: R_t 4-21 on reached classes (DNF-SGD 9-15, medians: DNF-SGD 13, UNSIR-SGD 10.5, USI(F)R-SGD 9) and end at 54-58% (base 74). The "never" cases are DNF-SGD, USI(F)R-SGD and NegGrad on classes 2 and 3, and UNSIR-SGD on class 3 only (class 2 reached at epoch 21). These are threshold artefacts: the curves for classes 2 and 3 plateau at about 35-44% (base 67 and 62), so a 50% cut misses them; the end-of-30-epoch forget accuracy is the more stable statistic. FineTune is intermediate (R_t 25-27 or >30, 45% at ep 30); NegGrad relearns fast (8-21) and ends at 53%. Medians over reached classes only; class means treat >30 as 31 (lower bounds).
+- **Shallow vs deep.** The SGD-noise methods (DNF-SGD, UNSIR-SGD, USI(F)R-SGD) forget shallowly by both diagnostics: output suppressed (Acc_f 0-12%) but the class stays linearly decodable well above Retrain and relearns quickly. NegGrad is shallow on R_t but near the floor on the probe (mixed). Adam-based methods are near Retrain on both, but so is the no-noise Adam control. FineTune sits in between.
+- **Is DNF-SGD's low W_D superficial forgetting? Yes, consistent with that.** W_D 5.4 vs 105 for Retrain and 89-105 for the Adam variants; probe 57% (about +21 over floor) and relearning in 9-15 epochs on the classes where it reaches 50%. Its Acc_f = 0 is largely a suppressed forget-class output: roughly half of the linear separability above the Retrain floor remains ((57.3-36.6)/(74.0-36.6) = 55%). Caveat: NegGrad also has low W_D (8.5) but a lower probe (43%), so W_D is a coarse indicator, not a perfect predictor.
+- **Adam vs Retrain.** Adam-based methods are the closest to Retrain on probe and R_t, but they are also indistinguishable from the no-noise Adam control (probe 42.7, R_t >30): the deep forgetting comes from Adam lr 0.02 retain-only training drift (W_D about 90-100, i.e. as far from the base as a retrain), not from the noise, consistent with the consolidated table. They pay for it in retain accuracy (67-71 vs 74.8 for Retrain, 77 base). No Adam method beats "Adam on retain only".
+- **Caveats.** 5 classes (SE 3-5 points on probe; class 2 and 3 with low base accuracy behave differently), 1 seed, one base, one probe set/regulariser and one relearn protocol, all our choices (R_t depends on the 100+900 mix, lr 1e-4 and the 50% threshold; results would shift with others). The paper's R_t (relearning time on the forget set) is not reproduced by this definition; ours is time to 50% test accuracy on the class under a mixed relearn set. Relearn curves are single runs (seed 0; a class-0 rerun of DNF-SGD gave probe 63.3 / R_t 12 vs 61.9 / 13 here, and of Retrain a probe of 50.2 vs 42.7, so GPU run-to-run noise is real), and the unlearned models for probe/R_t are the seed-0 reruns, not the 30-run ensemble. The probe-train images were seen by the base during its own training.
